@@ -53,10 +53,8 @@ def save_songs_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
+    return '.' in filename and filename.rsplit('.', 1).lower() in ALLOWED_EXTENSIONS
 def analyze_audio(file_path):
-    # 省メモリのため sr=11025, float32 で読み込み
     y, sr = librosa.load(file_path, sr=11025, mono=True, dtype=np.float32)
     duration = float(len(y)) / sr
     if duration > MAX_DURATION or len(y) == 0 or np.max(np.abs(y)) < 1e-4:
@@ -65,11 +63,10 @@ def analyze_audio(file_path):
         raise ValueError("ERR-004")
 
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    bpm = int(round(float(np.atleast_1d(tempo)[0])))
+    bpm = int(round(float(np.atleast_1d(tempo))))
     if bpm <= 0:
         bpm = 120
 
-    # 超軽量な chroma_stft を使用してメモリ使用量を大幅削減
     hop_length = 1024
     chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=hop_length)
     del y
@@ -82,8 +79,8 @@ def analyze_audio(file_path):
     best_score = -1
     estimated_key = "C Major"
     for i in range(12):
-        maj_corr = np.corrcoef(chroma_mean, np.roll(major_profile, i))[0, 1]
-        min_corr = np.corrcoef(chroma_mean, np.roll(minor_profile, i))[0, 1]
+        maj_corr = np.corrcoef(chroma_mean, np.roll(major_profile, i))
+        min_corr = np.corrcoef(chroma_mean, np.roll(minor_profile, i))
         if maj_corr > best_score:
             best_score = maj_corr
             estimated_key = f"{NOTES[i]} Major"
@@ -109,7 +106,7 @@ def analyze_audio(file_path):
     for b in range(analyze_bars):
         start_sample = int(b * bar_duration * sr / hop_length)
         end_sample = int((b + 1) * bar_duration * sr / hop_length)
-        if start_sample >= chroma.shape[1]:
+        if start_sample >= chroma.shape:
             break
         bar_chroma = np.mean(chroma[:, start_sample:max(start_sample + 1, end_sample)], axis=1)
         if np.linalg.norm(bar_chroma) < 1e-5:
@@ -126,10 +123,7 @@ def analyze_audio(file_path):
 
     del chroma
     gc.collect()
-
-    valid_chords = [c for c in original_chords if c != "不明"]
-    warn_err006 = len(valid_chords) == 0
-    return estimated_key, bpm, original_chords, warn_err006
+    return estimated_key, bpm, original_chords, len([c for c in original_chords if c != "不明"]) == 0
 def transpose_chord(chord, capo):
     if chord == "不明" or capo == 0:
         return chord
@@ -137,58 +131,40 @@ def transpose_chord(chord, capo):
     root = chord[:-1] if is_minor else chord
     if root not in NOTES:
         return chord
-    new_idx = (NOTES.index(root) - capo) % 12
-    return f"{NOTES[new_idx]}{'m' if is_minor else ''}"
+    return f"{NOTES[(NOTES.index(root) - capo) % 12]}{'m' if is_minor else ''}"
 
 def convert_chords_with_capo(original_chords, capo):
     converted = [transpose_chord(c, capo) for c in original_chords]
-    has_unregistered = any(c != "不明" and c not in CHORDS_DICT for c in converted)
-    return converted, has_unregistered
+    return converted, any(c != "不明" and c not in CHORDS_DICT for c in converted)
 
 def find_best_capo(original_chords):
-    best_capo = 0
-    best_score = -9999
+    best_capo, best_score = 0, -9999
     for capo in range(8):
-        converted = [transpose_chord(c, capo) for c in original_chords]
-        score = 0
-        for c in converted:
-            if c in EASY_OPEN_CHORDS:
-                score += 10
-            elif c in CHORDS_DICT:
-                score += 2
-            else:
-                score -= 5
-        score -= capo * 0.2
+        score = sum(10 if c in EASY_OPEN_CHORDS else (2 if c in CHORDS_DICT else -5) for c in [transpose_chord(x, capo) for x in original_chords]) - capo * 0.2
         if score > best_score:
-            best_score = score
-            best_capo = capo
+            best_score, best_capo = score, capo
     return best_capo
 
 def generate_chord_diagram_base64(chord_name):
     if chord_name not in CHORDS_DICT:
         return None
     try:
-        info = CHORDS_DICT[chord_name][0]
-        frets = info["frets"]
-        base_fret = info.get("base_fret", 1)
+        info = CHORDS_DICT[chord_name]
+        frets, base_fret = info["frets"], info.get("base_fret", 1)
         fig, ax = plt.subplots(figsize=(2.0, 2.4), dpi=90)
         fig.patch.set_facecolor('#f9f1e4')
         ax.set_facecolor('#f9f1e4')
         for s in range(6):
-            ax.plot([s, s], [0, 4], color='#3e2723', linewidth=1.3)
+            ax.plot([s, s],, color='#3e2723', linewidth=1.3)
         for f in range(5):
-            lw = 3.5 if (f == 0 and base_fret == 1) else 1.2
-            ax.plot([0, 5], [f, f], color='#3e2723', linewidth=lw)
+            ax.plot(, [f, f], color='#3e2723', linewidth=(3.5 if (f == 0 and base_fret == 1) else 1.2))
         for s_idx, fret_val in enumerate(frets):
             if fret_val == 'x':
                 ax.text(s_idx, -0.35, '×', ha='center', va='center', fontsize=11, color='#b71c1c', fontweight='bold')
             elif fret_val == 0:
                 ax.text(s_idx, -0.35, '○', ha='center', va='center', fontsize=10, color='#2e7d32', fontweight='bold')
-            else:
-                rel_fret = fret_val - base_fret + 1
-                if 1 <= rel_fret <= 4:
-                    circle = plt.Circle((s_idx, rel_fret - 0.5), 0.24, color='#5d4037', zorder=5)
-                    ax.add_patch(circle)
+            elif 1 <= (fret_val - base_fret + 1) <= 4:
+                ax.add_patch(plt.Circle((s_idx, fret_val - base_fret + 0.5), 0.24, color='#5d4037', zorder=5))
         if base_fret > 1:
             ax.text(-0.55, 0.5, f"{base_fret}fr", ha='right', va='center', fontsize=9, color='#3e2723', fontweight='bold')
         ax.set_title(chord_name, fontsize=13, fontweight='bold', color='#3e2723', pad=14)
@@ -199,26 +175,19 @@ def generate_chord_diagram_base64(chord_name):
         plt.savefig(buf, format='png', bbox_inches='tight', facecolor=fig.get_facecolor())
         plt.close(fig)
         return base64.b64encode(buf.getvalue()).decode('utf-8')
-    except Exception as e:
-        print(f"[ERR-008] Diagram error: {e}")
+    except Exception:
         return "ERROR"
 
 def build_diagrams(chords):
-    unique_chords = []
-    for c in chords:
-        if c != "不明" and c not in unique_chords:
-            unique_chords.append(c)
-    diagrams = {}
-    diagram_error = False
-    for c in unique_chords:
+    diagrams, err = {}, False
+    for c in dict.fromkeys(c for c in chords if c != "不明"):
         img = generate_chord_diagram_base64(c)
         if img == "ERROR":
-            diagram_error = True
-        elif img is not None:
+            err = True
+        elif img:
             diagrams[c] = img
     gc.collect()
-    return diagrams, diagram_error
-
+    return diagrams, err
 @app.route('/', methods=['GET'])
 def index():
     return render_template('index.html')
@@ -250,13 +219,11 @@ def analyze():
         diagrams, warn_err008 = build_diagrams(converted_chords)
         if warn_err008:
             flash("コードの図を表示できませんでした。コード名を確認して演奏してください。", "warning")
-        default_title = os.path.splitext(file.filename)[0]
-        return render_template('result.html', song_id=None, title=default_title, key=estimated_key, bpm=bpm, best_capo=best_capo, selected_capo=best_capo, original_chords=original_chords, converted_chords=converted_chords, diagrams=diagrams, mode='beginner')
+        return render_template('result.html', song_id=None, title=os.path.splitext(file.filename), key=estimated_key, bpm=bpm, best_capo=best_capo, selected_capo=best_capo, original_chords=original_chords, converted_chords=converted_chords, diagrams=diagrams, mode='beginner')
     except ValueError as ve:
         flash("6分以内の音声が含まれる楽曲ファイルを選択してください。" if str(ve) == "ERR-004" else "音声ファイルの読み込みに失敗しました。", "error")
         return redirect(url_for('index'))
-    except Exception as e:
-        print(f"Analysis failed: {e}")
+    except Exception:
         flash("音声ファイルの読み込みに失敗しました。別のファイルでお試しください。", "error")
         return redirect(url_for('index'))
     finally:
@@ -266,27 +233,18 @@ def analyze():
 
 @app.route('/analyze/capo', methods=['POST'])
 def analyze_capo():
-    title = request.form.get('title', '')
-    key = request.form.get('key', 'C Major')
-    bpm = int(request.form.get('bpm', 120))
-    best_capo = int(request.form.get('best_capo', 0))
-    selected_capo = int(request.form.get('selected_capo', 0))
-    mode = request.form.get('mode', 'beginner')
+    title, key, bpm = request.form.get('title', ''), request.form.get('key', 'C Major'), int(request.form.get('bpm', 120))
+    best_capo, selected_capo, mode = int(request.form.get('best_capo', 0)), int(request.form.get('selected_capo', 0)), request.form.get('mode', 'beginner')
     original_chords = json.loads(request.form.get('original_chords', '[]'))
-    target_capo = 0 if mode == 'original' else selected_capo
-    converted_chords, _ = convert_chords_with_capo(original_chords, target_capo)
+    converted_chords, _ = convert_chords_with_capo(original_chords, 0 if mode == 'original' else selected_capo)
     diagrams, _ = build_diagrams(converted_chords)
     return render_template('result.html', song_id=None, title=title, key=key, bpm=bpm, best_capo=best_capo, selected_capo=selected_capo, original_chords=original_chords, converted_chords=converted_chords, diagrams=diagrams, mode=mode)
 
 @app.route('/songs/save', methods=['POST'])
 def save_song():
     title = request.form.get('title', '').strip()
-    key = request.form.get('key', 'C Major')
-    bpm = int(request.form.get('bpm', 120))
-    best_capo = int(request.form.get('best_capo', 0))
-    selected_capo = int(request.form.get('selected_capo', 0))
-    original_chords = json.loads(request.form.get('original_chords', '[]'))
-    converted_chords = json.loads(request.form.get('converted_chords', '[]'))
+    key, bpm, best_capo, selected_capo = request.form.get('key', 'C Major'), int(request.form.get('bpm', 120)), int(request.form.get('best_capo', 0)), int(request.form.get('selected_capo', 0))
+    original_chords, converted_chords = json.loads(request.form.get('original_chords', '[]')), json.loads(request.form.get('converted_chords', '[]'))
     if not title:
         flash("保存する楽曲タイトルを入力してください。", "error")
         diagrams, _ = build_diagrams(converted_chords)
@@ -295,8 +253,7 @@ def save_song():
     if len(data["songs"]) >= MAX_SAVED_SONGS:
         flash("保存できる楽曲数の上限に達しています。", "error")
         return redirect(url_for('codebook'))
-    new_song = {"song_id": f"song_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:4]}", "title": title, "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "key": key, "bpm": bpm, "best_capo": best_capo, "selected_capo": selected_capo, "original_chords": original_chords, "converted_chords": converted_chords}
-    data["songs"].insert(0, new_song)
+    data["songs"].insert(0, {"song_id": f"song_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:4]}", "title": title, "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "key": key, "bpm": bpm, "best_capo": best_capo, "selected_capo": selected_capo, "original_chords": original_chords, "converted_chords": converted_chords})
     save_songs_data(data)
     flash(f"「{title}」をマイコードブックに保存しました。", "success")
     return redirect(url_for('codebook'))
@@ -311,7 +268,7 @@ def open_song(song_id):
     data = load_saved_songs()
     song = next((s for s in data["songs"] if s["song_id"] == song_id), None) if data else None
     if not song:
-        flash("指定された楽曲データが見つからないか、読み込めませんでした。", "error")
+        flash("指定された楽曲データが見つかりませんでした。", "error")
         return redirect(url_for('codebook'))
     diagrams, _ = build_diagrams(song["converted_chords"])
     return render_template('result.html', song_id=song["song_id"], title=song["title"], key=song["key"], bpm=song["bpm"], best_capo=song.get("best_capo", song["selected_capo"]), selected_capo=song["selected_capo"], original_chords=song["original_chords"], converted_chords=song["converted_chords"], diagrams=diagrams, mode='beginner')
@@ -323,11 +280,8 @@ def update_saved_song_capo(song_id):
     if not song:
         flash("指定された楽曲データが見つかりませんでした。", "error")
         return redirect(url_for('codebook'))
-    selected_capo = int(request.form.get('selected_capo', 0))
-    mode = request.form.get('mode', 'beginner')
-    title = request.form.get('title', song["title"])
-    target_capo = 0 if mode == 'original' else selected_capo
-    converted_chords, _ = convert_chords_with_capo(song["original_chords"], target_capo)
+    selected_capo, mode, title = int(request.form.get('selected_capo', 0)), request.form.get('mode', 'beginner'), request.form.get('title', song["title"])
+    converted_chords, _ = convert_chords_with_capo(song["original_chords"], 0 if mode == 'original' else selected_capo)
     diagrams, _ = build_diagrams(converted_chords)
     return render_template('result.html', song_id=song_id, title=title, key=song["key"], bpm=song["bpm"], best_capo=song.get("best_capo", selected_capo), selected_capo=selected_capo, original_chords=song["original_chords"], converted_chords=converted_chords, diagrams=diagrams, mode=mode)
 
@@ -335,27 +289,26 @@ def update_saved_song_capo(song_id):
 def overwrite_song(song_id):
     title = request.form.get('title', '').strip()
     if not title:
-flash("保存する楽曲タイトルを入力してください。", "error")
-return redirect(url_for('open_song', song_id=song_id))
-data = load_saved_songs()
-song = next((s for s in data["songs"] if s["song_id"] == song_id), None) if data else None
-if song:
-selected_capo = int(request.form.get('selected_capo', 0))
-converted_chords, _ = convert_chords_with_capo(song["original_chords"], selected_capo)
-song["title"] = title
-song["selected_capo"] = selected_capo
-song["converted_chords"] = converted_chords
-song["created_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-save_songs_data(data)
-flash(f"「{title}」の設定を上書き保存しました。", "success")
-return redirect(url_for('open_song', song_id=song_id))
+        flash("保存する楽曲タイトルを入力してください。", "error")
+        return redirect(url_for('open_song', song_id=song_id))
+    data = load_saved_songs()
+    song = next((s for s in data["songs"] if s["song_id"] == song_id), None) if data else None
+    if song:
+        selected_capo = int(request.form.get('selected_capo', 0))
+        converted_chords, _ = convert_chords_with_capo(song["original_chords"], selected_capo)
+        song.update({"title": title, "selected_capo": selected_capo, "converted_chords": converted_chords, "created_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')})
+        save_songs_data(data)
+        flash(f"「{title}」の設定を上書き保存しました。", "success")
+    return redirect(url_for('open_song', song_id=song_id))
+
 @app.route('/songs/<song_id>/delete', methods=['POST'])
 def delete_song(song_id):
-data = load_saved_songs()
-if data:
-data["songs"] = [s for s in data["songs"] if s["song_id"] != song_id]
-save_songs_data(data)
-flash("楽曲を削除しました。", "success")
-return redirect(url_for('codebook'))
-if name == 'main':
-app.run(debug=True, port=5000)
+    data = load_saved_songs()
+    if data:
+        data["songs"] = [s for s in data["songs"] if s["song_id"] != song_id]
+        save_songs_data(data)
+        flash("楽曲を削除しました。", "success")
+    return redirect(url_for('codebook'))
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
