@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guitar Copy Assist - アコースティックギター向けコード解析</title>
+    <style>
+        :root {
+            --wood-light: #e5b87b;
+            --wood-mid: #c88a4b;
+            --wood-dark: #8c5327;
+            --rosewood: #3e2215;
+            --pickguard: #5a1e12;
+            --cream: #fcf6ec;
+        }
+        body {
+            margin: 0;
+            font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+            color: var(--rosewood);
+            /* スプルース材の木目テクスチャ表現 */
+            background-color: var(--wood-light);
+            background-image:
+                repeating-linear-gradient(90deg, rgba(140, 83, 39, 0.06) 0px, rgba(140, 83, 39, 0.06) 2px, transparent 2px, transparent 8px),
+                repeating-linear-gradient(90deg, rgba(255, 235, 200, 0.12) 0px, rgba(255, 235, 200, 0.12) 5px, transparent 5px, transparent 17px),
+                radial-gradient(circle at 50% 45%, #f2cf98 0%, #c88a4b 75%, #8c5327 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        /* サウンドホール風ヘッダー装飾 */
+        .soundhole-banner {
+            width: 100%;
+            background: linear-gradient(180deg, var(--rosewood) 0%, #522e1d 100%);
+            color: var(--cream);
+            padding: 24px 16px;
+            text-align: center;
+            border-bottom: 6px double #d4a359;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .soundhole-banner h1 {
+            margin: 0;
+            font-size: 2rem;
+            letter-spacing: 2px;
+        }
+        .soundhole-banner p {
+            margin: 8px 0 0;
+            font-size: 0.95rem;
+            color: #e8cfa6;
+        }
+        .container {
+            width: 92%;
+            max-width: 720px;
+            margin: 32px auto;
+            background: rgba(252, 246, 236, 0.93);
+            border: 3px solid var(--wood-dark);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 10px 25px rgba(62, 34, 21, 0.35);
+            position: relative;
+        }
+        /* アコギのロゼッタ（サウンドホール装飾リング）風の円 */
+        .rosette-accent {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: var(--rosewood);
+            border: 4px double #d4a359;
+            box-shadow: 0 0 0 3px var(--pickguard);
+            margin: -64px auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #f2cf98;
+            font-size: 1.5rem;
+        }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .alert-error { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+        .alert-warning { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+        .alert-success { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+
+        .specs-box {
+            background: #f4e6d0;
+            border-left: 5px solid var(--wood-dark);
+            padding: 14px 18px;
+            border-radius: 6px;
+            margin-bottom: 24px;
+            font-size: 0.92rem;
+        }
+        .specs-box ul { margin: 6px 0 0; padding-left: 20px; }
+
+        .upload-area {
+            border: 2px dashed var(--wood-dark);
+            background: #fffaf2;
+            padding: 28px;
+            text-align: center;
+            border-radius: 12px;
+            margin-bottom: 24px;
+        }
+        input[type="file"] {
+            font-size: 1rem;
+            padding: 8px;
+        }
+        /* 鼈甲（べっこう）ピックガード風メインボタン */
+        .btn-pickguard {
+            display: inline-block;
+            width: 100%;
+            padding: 15px;
+            font-size: 1.15rem;
+            font-weight: bold;
+            color: #fff;
+            background: radial-gradient(circle at 30% 30%, #8e351e, #4a150b);
+            border: 2px solid #d4a359;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+            transition: transform 0.15s, filter 0.15s;
+        }
+        .btn-pickguard:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+        .btn-wood {
+            display: block;
+            text-align: center;
+            margin-top: 16px;
+            padding: 12px;
+            background: var(--wood-dark);
+            color: var(--cream);
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            border: 1px solid var(--rosewood);
+        }
+        .btn-wood:hover { background: var(--rosewood); }
+
+        #loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            padding: 16px;
+            background: #f4e6d0;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <header class="soundhole-banner">
+        <h1>Guitar Copy Assist</h1>
+        <p>アコースティックギター向け コード解析・カポ位置変換・マイコードブック</p>
+    </header>
+
+    <div class="container">
+        <div class="rosette-accent">🎸</div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <div class="specs-box">
+            <strong>【アップロード条件・仕様】</strong>
+            <ul>
+                <li>対応ファイル形式：<strong>MP3 / WAV</strong></li>
+                <li>最大ファイルサイズ：<strong>20MB以内</strong></li>
+                <li>楽曲時間制限：<strong>6分以内</strong>（推奨：約4分）</li>
+            </ul>
+        </div>
+
+        <form action="{{ url_for('analyze') }}" method="POST" enctype="multipart/form-data" onsubmit="showLoading()">
+            <div class="upload-area">
+                <p>解析したい楽曲ファイルを選択してください</p>
+                <input type="file" name="audio_file" accept=".mp3,.wav">
+            </div>
+            <button type="submit" class="btn-pickguard">解析開始</button>
+        </form>
+
+        <div id="loading">
+            🎵 楽曲のキー・BPM・コード進行を解析中です...（数十秒かかる場合があります）
+        </div>
+
+        <a href="{{ url_for('codebook') }}" class="btn-wood">📖 マイコードブックを見る（保存した曲一覧）</a>
+    </div>
+
+    <script>
+        function showLoading() {
+            document.getElementById('loading').style.display = 'block';
+        }
+    </script>
+</body>
+</html>

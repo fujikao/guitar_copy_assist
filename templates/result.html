@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>解析結果 - Guitar Copy Assist</title>
+    <style>
+        :root {
+            --wood-light: #e5b87b;
+            --wood-mid: #c88a4b;
+            --wood-dark: #8c5327;
+            --rosewood: #3e2215;
+            --pickguard: #5a1e12;
+            --cream: #fcf6ec;
+        }
+        body {
+            margin: 0;
+            font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+            color: var(--rosewood);
+            background-color: var(--wood-light);
+            background-image:
+                repeating-linear-gradient(90deg, rgba(140, 83, 39, 0.06) 0px, rgba(140, 83, 39, 0.06) 2px, transparent 2px, transparent 8px),
+                radial-gradient(circle at 50% 30%, #f2cf98 0%, #c88a4b 80%, #8c5327 100%);
+            min-height: 100vh;
+        }
+        .header {
+            background: var(--rosewood);
+            color: var(--cream);
+            padding: 16px 24px;
+            border-bottom: 5px double #d4a359;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .header h1 { margin: 0; font-size: 1.4rem; }
+        .container {
+            width: 94%;
+            max-width: 960px;
+            margin: 24px auto 48px;
+            background: rgba(252, 246, 236, 0.95);
+            border: 3px solid var(--wood-dark);
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: 0 8px 20px rgba(62, 34, 21, 0.3);
+        }
+        .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-weight: bold; }
+        .alert-error { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+        .alert-warning { background: #fff8e1; color: #e65100; border: 1px solid #ffe082; }
+        .alert-success { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+
+        .info-bar {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            background: #f4e6d0;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--wood-mid);
+            margin-bottom: 20px;
+        }
+        .info-badge {
+            background: var(--rosewood);
+            color: #f2cf98;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+        .capo-panel {
+            background: #fff9f0;
+            border: 2px solid var(--wood-dark);
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+        }
+        .capo-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        select, input[type="text"] {
+            padding: 8px 12px;
+            border: 1px solid var(--wood-dark);
+            border-radius: 6px;
+            font-size: 1rem;
+            background: #fff;
+        }
+        .btn {
+            padding: 9px 18px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.95rem;
+        }
+        .btn-primary { background: var(--pickguard); color: #fff; border: 1px solid #d4a359; }
+        .btn-secondary { background: var(--wood-dark); color: #fff; }
+        .btn-outline { background: transparent; border: 2px solid var(--wood-dark); color: var(--rosewood); }
+
+        .section-title {
+            border-bottom: 2px solid var(--wood-dark);
+            padding-bottom: 6px;
+            margin: 24px 0 14px;
+            font-size: 1.2rem;
+        }
+        /* コード進行のフレットボード風グリッド */
+        .chord-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 10px;
+        }
+        .bar-card {
+            background: #fff;
+            border: 1px solid var(--wood-mid);
+            border-top: 4px solid var(--rosewood);
+            border-radius: 6px;
+            padding: 8px;
+            text-align: center;
+        }
+        .bar-num { font-size: 0.75rem; color: #795548; }
+        .chord-conv { font-size: 1.25rem; font-weight: bold; color: var(--pickguard); margin: 4px 0; }
+        .chord-orig { font-size: 0.8rem; color: #6d4c41; }
+
+        /* コードダイアグラム一覧 */
+        .diagrams-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+        .diagram-item {
+            background: #f9f1e4;
+            border: 2px solid var(--wood-mid);
+            border-radius: 8px;
+            padding: 6px;
+            text-align: center;
+        }
+        .save-panel {
+            margin-top: 28px;
+            background: #f4e6d0;
+            border: 2px solid var(--rosewood);
+            padding: 18px;
+            border-radius: 10px;
+        }
+        .nav-links {
+            margin-top: 24px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>🎸 Guitar Copy Assist - 解析結果</h1>
+        <div>
+            <a href="{{ url_for('codebook') }}" class="btn btn-secondary">📖 マイコードブック</a>
+            <a href="{{ url_for('index') }}" class="btn btn-outline" style="color:#fcf6ec; border-color:#d4a359;">別の曲を解析</a>
+        </div>
+    </header>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <!-- 基本情報エリア -->
+        <div class="info-bar">
+            <div class="info-badge">推定キー：{{ key }}</div>
+            <div class="info-badge">推定BPM：{{ bpm }}</div>
+            <div class="info-badge" style="background: var(--pickguard);">おすすめカポ：{% if best_capo == 0 %}カポなし{% else %}{{ best_capo }}フレット{% endif %}</div>
+        </div>
+
+        <!-- カポ設定・難易度切り替えエリア -->
+        <div class="capo-panel">
+            <strong>カポ位置・表示モード設定</strong>
+            <form action="{{ url_for('update_saved_song_capo', song_id=song_id) if song_id else url_for('analyze_capo') }}" method="POST" class="capo-controls">
+                <input type="hidden" name="title" value="{{ title }}">
+                <input type="hidden" name="key" value="{{ key }}">
+                <input type="hidden" name="bpm" value="{{ bpm }}">
+                <input type="hidden" name="best_capo" value="{{ best_capo }}">
+                <input type="hidden" name="original_chords" value='{{ original_chords | tojson }}'>
+
+                <label>カポ位置：
+                    <select name="selected_capo">
+                        {% for c in range(8) %}
+                        <option value="{{ c }}" {% if selected_capo == c %}selected{% endif %}>
+                            {% if c == 0 %}カポなし (0){% else %}{{ c }}フレット{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label>表示モード：
+                    <select name="mode">
+                        <option value="beginner" {% if mode == 'beginner' %}selected{% endif %}>初心者向けコード変換</option>
+                        <option value="original" {% if mode == 'original' %}selected{% endif %}>原曲コード重視</option>
+                    </select>
+                </label>
+
+                <button type="submit" class="btn btn-secondary">コードを再表示</button>
+            </form>
+        </div>
+
+        <!-- コードダイアグラム一覧 -->
+        <h2 class="section-title">使用コードダイアグラム（押さえ方図）</h2>
+        {% if diagrams %}
+        <div class="diagrams-grid">
+            {% for chord_name, img_b64 in diagrams.items() %}
+            <div class="diagram-item">
+                <img src="data:image/png;base64,{{ img_b64 }}" alt="{{ chord_name }}">
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p>表示できるコードダイアグラムがありません。</p>
+        {% endif %}
+
+        <!-- コード進行一覧（小節単位比較） -->
+        <h2 class="section-title">
+            コード進行一覧（{% if mode == 'original' or selected_capo == 0 %}カポなし{% else %}カポ {{ selected_capo }}フレット{% endif %}）
+        </h2>
+        <div class="chord-grid">
+            {% for i in range(original_chords | length) %}
+            <div class="bar-card">
+                <div class="bar-num">{{ i + 1 }}小節目</div>
+                <div class="chord-conv">{{ converted_chords[i] }}</div>
+                <div class="chord-orig">原曲: {{ original_chords[i] }}</div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- マイコードブック保存エリア -->
+        <div class="save-panel">
+            <strong>📖 マイコードブックに保存</strong>
+            <form action="{{ url_for('overwrite_song', song_id=song_id) if song_id else url_for('save_song') }}" method="POST" style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="hidden" name="key" value="{{ key }}">
+                <input type="hidden" name="bpm" value="{{ bpm }}">
+                <input type="hidden" name="best_capo" value="{{ best_capo }}">
+                <input type="hidden" name="selected_capo" value="{{ selected_capo }}">
+                <input type="hidden" name="original_chords" value='{{ original_chords | tojson }}'>
+                <input type="hidden" name="converted_chords" value='{{ converted_chords | tojson }}'>
+
+                <input type="text" name="title" value="{{ title }}" placeholder="楽曲タイトルを入力" style="flex: 1; min-width: 220px;">
+                <button type="submit" class="btn btn-primary">
+                    {% if song_id %}現在のカポ設定で上書き保存{% else %}マイコードブックに保存{% endif %}
+                </button>
+            </form>
+        </div>

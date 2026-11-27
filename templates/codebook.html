@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>マイコードブック - Guitar Copy Assist</title>
+    <style>
+        :root {
+            --wood-light: #e5b87b;
+            --wood-mid: #c88a4b;
+            --wood-dark: #8c5327;
+            --rosewood: #3e2215;
+            --pickguard: #5a1e12;
+            --cream: #fcf6ec;
+        }
+        body {
+            margin: 0;
+            font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+            color: var(--rosewood);
+            background-color: var(--wood-light);
+            background-image:
+                repeating-linear-gradient(90deg, rgba(140, 83, 39, 0.06) 0px, rgba(140, 83, 39, 0.06) 2px, transparent 2px, transparent 8px),
+                radial-gradient(circle at 50% 30%, #f2cf98 0%, #c88a4b 80%, #8c5327 100%);
+            min-height: 100vh;
+        }
+        .header {
+            background: var(--rosewood);
+            color: var(--cream);
+            padding: 18px 24px;
+            border-bottom: 5px double #d4a359;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 { margin: 0; font-size: 1.5rem; }
+        .container {
+            width: 92%;
+            max-width: 860px;
+            margin: 28px auto;
+            background: rgba(252, 246, 236, 0.95);
+            border: 3px solid var(--wood-dark);
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: 0 8px 20px rgba(62, 34, 21, 0.3);
+        }
+        .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-weight: bold; }
+        .alert-error { background: #ffebee; color: #b71c1c; border: 1px solid #ef9a9a; }
+        .alert-success { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+
+        .song-card {
+            background: #fffaf2;
+            border: 2px solid var(--wood-mid);
+            border-left: 8px solid var(--pickguard);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .song-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin: 0 0 6px;
+        }
+        .song-meta {
+            font-size: 0.9rem;
+            color: #5d4037;
+        }
+        .song-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 9px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.92rem;
+        }
+        .btn-open { background: var(--pickguard); color: #fff; border: 1px solid #d4a359; }
+        .btn-delete { background: #d7ccc8; color: #3e2723; }
+        .btn-delete:hover { background: #ef9a9a; color: #b71c1c; }
+        .btn-back {
+            display: inline-block;
+            margin-top: 16px;
+            background: var(--wood-dark);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>📖 マイコードブック（保存楽曲一覧）</h1>
+        <a href="{{ url_for('index') }}" class="btn" style="background:#8c5327; color:#fff;">＋ 新しい曲を解析</a>
+    </header>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        {% if songs %}
+            {% for song in songs %}
+            <div class="song-card">
+                <div>
+                    <h2 class="song-title">{{ song.title }}</h2>
+                    <div class="song-meta">
+                        キー: <strong>{{ song.key }}</strong> ／
+                        BPM: <strong>{{ song.bpm }}</strong> ／
+                        カポ: <strong>{% if song.selected_capo == 0 %}なし{% else %}{{ song.selected_capo }}フレット{% endif %}</strong><br>
+                        保存日時: {{ song.created_at }}
+                    </div>
+                </div>
+                <div class="song-actions">
+                    <a href="{{ url_for('open_song', song_id=song.song_id) }}" class="btn btn-open">開く（コードを見る）</a>
+                    <form action="{{ url_for('delete_song', song_id=song.song_id) }}" method="POST" onsubmit="return confirm('この楽曲を削除しますか？');">
+                        <button type="submit" class="btn btn-delete">削除</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <p style="text-align: center; padding: 32px 0;">まだ保存された楽曲がありません。トップ画面から楽曲を解析して保存してみましょう！</p>
+        {% endif %}
+
+        <a href="{{ url_for('index') }}" class="btn-back">トップ画面に戻る</a>
+    </div>
+</body>
+</html>
