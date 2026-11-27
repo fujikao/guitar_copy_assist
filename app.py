@@ -53,7 +53,7 @@ def save_songs_data(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1).lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[-1].lower() in ALLOWED_EXTENSIONS
 def analyze_audio(file_path):
     y, sr = librosa.load(file_path, sr=11025, mono=True, dtype=np.float32)
     duration = float(len(y)) / sr
@@ -63,7 +63,7 @@ def analyze_audio(file_path):
         raise ValueError("ERR-004")
 
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-    bpm = int(round(float(np.atleast_1d(tempo))))
+    • bpm = int(round(float(np.atleast_1d(tempo)[-1])))
     if bpm <= 0:
         bpm = 120
 
@@ -79,8 +79,8 @@ def analyze_audio(file_path):
     best_score = -1
     estimated_key = "C Major"
     for i in range(12):
-        maj_corr = np.corrcoef(chroma_mean, np.roll(major_profile, i))
-        min_corr = np.corrcoef(chroma_mean, np.roll(minor_profile, i))
+        maj_corr = np.corrcoef(chroma_mean, np.roll(major_profile, i))[0, 1]
+        min_corr = np.corrcoef(chroma_mean, np.roll(minor_profile, i))[0, 1]
         if maj_corr > best_score:
             best_score = maj_corr
             estimated_key = f"{NOTES[i]} Major"
@@ -106,7 +106,7 @@ def analyze_audio(file_path):
     for b in range(analyze_bars):
         start_sample = int(b * bar_duration * sr / hop_length)
         end_sample = int((b + 1) * bar_duration * sr / hop_length)
-        if start_sample >= chroma.shape:
+        if start_sample >= chroma.shape[1]:
             break
         bar_chroma = np.mean(chroma[:, start_sample:max(start_sample + 1, end_sample)], axis=1)
         if np.linalg.norm(bar_chroma) < 1e-5:
@@ -149,7 +149,7 @@ def generate_chord_diagram_base64(chord_name):
     if chord_name not in CHORDS_DICT:
         return None
     try:
-        info = CHORDS_DICT[chord_name]
+        info = CHORDS_DICT[chord_name][0]
         frets, base_fret = info["frets"], info.get("base_fret", 1)
         fig, ax = plt.subplots(figsize=(2.0, 2.4), dpi=90)
         fig.patch.set_facecolor('#f9f1e4')
@@ -219,7 +219,7 @@ def analyze():
         diagrams, warn_err008 = build_diagrams(converted_chords)
         if warn_err008:
             flash("コードの図を表示できませんでした。コード名を確認して演奏してください。", "warning")
-        return render_template('result.html', song_id=None, title=os.path.splitext(file.filename), key=estimated_key, bpm=bpm, best_capo=best_capo, selected_capo=best_capo, original_chords=original_chords, converted_chords=converted_chords, diagrams=diagrams, mode='beginner')
+        return render_template('result.html', song_id=None, title=os.path.splitext(file.filename)[0], key=estimated_key, bpm=bpm, best_capo=best_capo, selected_capo=best_capo, original_chords=original_chords, converted_chords=converted_chords, diagrams=diagrams, mode='beginner')
     except ValueError as ve:
         flash("6分以内の音声が含まれる楽曲ファイルを選択してください。" if str(ve) == "ERR-004" else "音声ファイルの読み込みに失敗しました。", "error")
         return redirect(url_for('index'))
