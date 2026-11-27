@@ -1,9 +1,13 @@
-﻿import os
+import os
+import gc
 import json
 import uuid
 import base64
 from io import BytesIO
 from datetime import datetime
+
+os.environ['MPLCONFIGDIR'] = '/tmp'
+
 import numpy as np
 import librosa
 import matplotlib
@@ -14,7 +18,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 app = Flask(__name__)
 app.secret_key = 'guitar_copy_assist_secret_key'
 
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = '/tmp/uploads'
 ALLOWED_EXTENSIONS = {'mp3', 'wav'}
 MAX_FILE_SIZE = 20 * 1024 * 1024
 MAX_DURATION = 360.0
@@ -52,9 +56,12 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def analyze_audio(file_path):
-    y, sr = librosa.load(file_path, sr=22050, mono=True)
-    duration = librosa.get_duration(y=y, sr=sr)
-    if duration > MAX_DURATION or np.max(np.abs(y)) < 1e-4:
+    # 省メモリのため sr=11025, float32 で読み込み
+    y, sr = librosa.load(file_path, sr=11025, mono=True, dtype=np.float32)
+    duration = float(len(y)) / sr
+    if duration > MAX_DURATION or len(y) == 0 or np.max(np.abs(y)) < 1e-4:
+        del y
+        gc.collect()
         raise ValueError("ERR-004")
 
     tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
@@ -62,7 +69,12 @@ def analyze_audio(file_path):
     if bpm <= 0:
         bpm = 120
 
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    # 超軽量な chroma_stft を使用してメモリ使用量を大幅削減
+    hop_length = 1024
+    chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=hop_length)
+    del y
+    gc.collect()
+
     chroma_mean = np.mean(chroma, axis=1)
     major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
     minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
@@ -94,7 +106,6 @@ def analyze_audio(file_path):
         templates[f"{note}m"] = vec_min
 
     original_chords = []
-    hop_length = 512
     for b in range(analyze_bars):
         start_sample = int(b * bar_duration * sr / hop_length)
         end_sample = int((b + 1) * bar_duration * sr / hop_length)
@@ -113,10 +124,12 @@ def analyze_audio(file_path):
                 best_chord = chord_name
         original_chords.append(best_chord)
 
+    del chroma
+    gc.collect()
+
     valid_chords = [c for c in original_chords if c != "不明"]
     warn_err006 = len(valid_chords) == 0
     return estimated_key, bpm, original_chords, warn_err006
-
 def transpose_chord(chord, capo):
     if chord == "不明" or capo == 0:
         return chord
@@ -150,6 +163,7 @@ def find_best_capo(original_chords):
             best_score = score
             best_capo = capo
     return best_capo
+
 def generate_chord_diagram_base64(chord_name):
     if chord_name not in CHORDS_DICT:
         return None
@@ -157,7 +171,7 @@ def generate_chord_diagram_base64(chord_name):
         info = CHORDS_DICT[chord_name][0]
         frets = info["frets"]
         base_fret = info.get("base_fret", 1)
-        fig, ax = plt.subplots(figsize=(2.2, 2.6), dpi=110)
+        fig, ax = plt.subplots(figsize=(2.0, 2.4), dpi=90)
         fig.patch.set_facecolor('#f9f1e4')
         ax.set_facecolor('#f9f1e4')
         for s in range(6):
@@ -202,6 +216,7 @@ def build_diagrams(chords):
             diagram_error = True
         elif img is not None:
             diagrams[c] = img
+    gc.collect()
     return diagrams, diagram_error
 
 @app.route('/', methods=['GET'])
@@ -247,6 +262,7 @@ def analyze():
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        gc.collect()
 
 @app.route('/analyze/capo', methods=['POST'])
 def analyze_capo():
@@ -319,29 +335,27 @@ def update_saved_song_capo(song_id):
 def overwrite_song(song_id):
     title = request.form.get('title', '').strip()
     if not title:
-        flash("保存する楽曲タイトルを入力してください。", "error")
-        return redirect(url_for('open_song', song_id=song_id))
-    data = load_saved_songs()
-    song = next((s for s in data["songs"] if s["song_id"] == song_id), None) if data else None
-    if song:
-        selected_capo = int(request.form.get('selected_capo', 0))
-        converted_chords, _ = convert_chords_with_capo(song["original_chords"], selected_capo)
-        song["title"] = title
-        song["selected_capo"] = selected_capo
-        song["converted_chords"] = converted_chords
-        song["created_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        save_songs_data(data)
-        flash(f"「{title}」の設定を上書き保存しました。", "success")
-    return redirect(url_for('open_song', song_id=song_id))
-
+flash("保存する楽曲タイトルを入力してください。", "error")
+return redirect(url_for('open_song', song_id=song_id))
+data = load_saved_songs()
+song = next((s for s in data["songs"] if s["song_id"] == song_id), None) if data else None
+if song:
+selected_capo = int(request.form.get('selected_capo', 0))
+converted_chords, _ = convert_chords_with_capo(song["original_chords"], selected_capo)
+song["title"] = title
+song["selected_capo"] = selected_capo
+song["converted_chords"] = converted_chords
+song["created_at"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+save_songs_data(data)
+flash(f"「{title}」の設定を上書き保存しました。", "success")
+return redirect(url_for('open_song', song_id=song_id))
 @app.route('/songs/<song_id>/delete', methods=['POST'])
 def delete_song(song_id):
-    data = load_saved_songs()
-    if data:
-        data["songs"] = [s for s in data["songs"] if s["song_id"] != song_id]
-        save_songs_data(data)
-        flash("楽曲を削除しました。", "success")
-    return redirect(url_for('codebook'))
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+data = load_saved_songs()
+if data:
+data["songs"] = [s for s in data["songs"] if s["song_id"] != song_id]
+save_songs_data(data)
+flash("楽曲を削除しました。", "success")
+return redirect(url_for('codebook'))
+if name == 'main':
+app.run(debug=True, port=5000)
