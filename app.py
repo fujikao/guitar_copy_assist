@@ -79,8 +79,8 @@ def analyze_audio(file_path):
     best_score = -1
     estimated_key = "C Major"
     for i in range(12):
-        maj_corr = np.corrcoef(chroma_mean, np.roll(major_profile, i))[0, 1]
-        min_corr = np.corrcoef(chroma_mean, np.roll(minor_profile, i))[0, 1]
+        maj_corr = float(np.corrcoef(chroma_mean, np.roll(major_profile, i)).flatten()[-1])
+        min_corr = float(np.corrcoef(chroma_mean, np.roll(minor_profile, i)).flatten()[-1])
         if maj_corr > best_score:
             best_score = maj_corr
             estimated_key = f"{NOTES[i]} Major"
@@ -106,7 +106,7 @@ def analyze_audio(file_path):
     for b in range(analyze_bars):
         start_sample = int(b * bar_duration * sr / hop_length)
         end_sample = int((b + 1) * bar_duration * sr / hop_length)
-        if start_sample >= chroma.shape[1]:
+        if start_sample >= chroma.shape[-1]:
             break
         bar_chroma = np.mean(chroma[:, start_sample:max(start_sample + 1, end_sample)], axis=1)
         if np.linalg.norm(bar_chroma) < 1e-5:
@@ -149,7 +149,7 @@ def generate_chord_diagram_base64(chord_name):
     if chord_name not in CHORDS_DICT:
         return None
     try:
-        info = CHORDS_DICT[chord_name][0]
+        info = next(iter(CHORDS_DICT[chord_name]))
         frets, base_fret = info["frets"], info.get("base_fret", 1)
         fig, ax = plt.subplots(figsize=(2.0, 2.4), dpi=90)
         fig.patch.set_facecolor('#f9f1e4')
@@ -219,7 +219,7 @@ def analyze():
         diagrams, warn_err008 = build_diagrams(converted_chords)
         if warn_err008:
             flash("コードの図を表示できませんでした。コード名を確認して演奏してください。", "warning")
-        return render_template('result.html', song_id=None, title=os.path.splitext(file.filename)[0], key=estimated_key, bpm=bpm, best_capo=best_capo, selected_capo=best_capo, original_chords=original_chords, converted_chords=converted_chords, diagrams=diagrams, mode='beginner')
+        return render_template('result.html', song_id=None, title=file.filename, key=estimated_key, bpm=bpm, best_capo=best_capo, selected_capo=best_capo, original_chords=original_chords, converted_chords=converted_chords, diagrams=diagrams, mode='beginner')
     except ValueError as ve:
         flash("6分以内の音声が含まれる楽曲ファイルを選択してください。" if str(ve) == "ERR-004" else "音声ファイルの読み込みに失敗しました。", "error")
         return redirect(url_for('index'))
