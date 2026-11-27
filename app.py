@@ -155,9 +155,9 @@ def generate_chord_diagram_base64(chord_name):
         fig.patch.set_facecolor('#f9f1e4')
         ax.set_facecolor('#f9f1e4')
         for s in range(6):
-            ax.plot([s, s],, color='#3e2723', linewidth=1.3)
+            ax.plot([s, s], list(range(0, 5, 4)), color='#3e2723', linewidth=1.3)
         for f in range(5):
-            ax.plot(, [f, f], color='#3e2723', linewidth=(3.5 if (f == 0 and base_fret == 1) else 1.2))
+            ax.plot(list(range(0, 6, 5)), [f, f], color='#3e2723', linewidth=(3.5 if (f == 0 and base_fret == 1) else 1.2))
         for s_idx, fret_val in enumerate(frets):
             if fret_val == 'x':
                 ax.text(s_idx, -0.35, '×', ha='center', va='center', fontsize=11, color='#b71c1c', fontweight='bold')
